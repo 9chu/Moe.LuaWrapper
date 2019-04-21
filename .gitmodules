@@ -1,0 +1,3 @@
+[submodule "3rd/LuaJIT"]
+	path = 3rd/LuaJIT
+	url = http://github.com/9chu/LuaJIT-cmake
