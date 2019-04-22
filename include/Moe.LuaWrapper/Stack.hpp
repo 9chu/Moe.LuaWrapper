@@ -210,7 +210,28 @@ namespace LuaWrapper
             lua_pushinteger(L, v);
         }
 
-        void Push(lua_Number v)
+        void Push(int64_t v)
+        {
+            if (sizeof(lua_Integer) == 8)
+                lua_pushinteger(L, static_cast<lua_Integer>(v));
+            else
+                lua_pushnumber(L, static_cast<lua_Number>(v));
+        }
+
+        void Push(uint64_t v)
+        {
+            if (sizeof(lua_Integer) == 8)
+                lua_pushinteger(L, static_cast<lua_Integer>(v));
+            else
+                lua_pushnumber(L, static_cast<lua_Number>(v));
+        }
+
+        void Push(float v)
+        {
+            lua_pushnumber(L, v);
+        }
+
+        void Push(double v)
         {
             lua_pushnumber(L, v);
         }
@@ -475,7 +496,7 @@ namespace LuaWrapper
         void CallAndThrow(unsigned nargs, unsigned nrets)
         {
 #ifndef NDEBUG
-            int topCheck = lua_gettop(L);
+            unsigned topCheck = GetTop();
 #endif
 
             lua_pushcfunction(L, details::TracebackImpl);  // ... func, arg1, arg2, c
@@ -490,16 +511,16 @@ namespace LuaWrapper
                 lua_pop(L, 2);  // ...
 
 #ifndef NDEBUG
-                assert(topCheck - 1 == lua_gettop(L));
+                assert(topCheck - (1 + nargs) == GetTop());
 #endif
 
                 throw std::runtime_error(std::move(errmsg));
             }
 
-            lua_pop(L, 1);  // ...
+            lua_remove(L, where);  // ... ret1, ret2
 
 #ifndef NDEBUG
-            assert(topCheck - 1 == lua_gettop(L));
+            assert(topCheck - (1 + nargs) + nrets == GetTop());
 #endif
         }
 
@@ -596,12 +617,28 @@ namespace LuaWrapper
             out = static_cast<uint32_t>(luaL_checkinteger(L, idx));
         }
 
-        void ReadImpl(lua_Integer& out, int idx)
+        void ReadImpl(int64_t& out, int idx)
         {
-            out = luaL_checkinteger(L, idx);
+            if (sizeof(lua_Integer) == 8)
+                out = static_cast<int64_t>(luaL_checkinteger(L, idx));
+            else
+                out = static_cast<int64_t>(luaL_checknumber(L, idx));
         }
 
-        void ReadImpl(lua_Number& out, int idx)
+        void ReadImpl(uint64_t& out, int idx)
+        {
+            if (sizeof(lua_Integer) == 8)
+                out = static_cast<uint64_t>(luaL_checkinteger(L, idx));
+            else
+                out = static_cast<uint64_t>(luaL_checknumber(L, idx));
+        }
+
+        void ReadImpl(float& out, int idx)
+        {
+            out = static_cast<float>(luaL_checknumber(L, idx));
+        }
+
+        void ReadImpl(double& out, int idx)
         {
             out = luaL_checknumber(L, idx);
         }
