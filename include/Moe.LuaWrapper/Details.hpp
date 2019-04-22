@@ -450,7 +450,7 @@ namespace LuaWrapper
         };
 
         template <typename T>
-        struct TypeRegisterHelperImpl<std::function<T>, 2>
+        struct TypeRegisterHelperImpl<T, 2>
         {
             static const bool CanAutoRegister = true;
 

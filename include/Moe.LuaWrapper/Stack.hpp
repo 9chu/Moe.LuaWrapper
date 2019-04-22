@@ -441,6 +441,7 @@ namespace LuaWrapper
         [[noreturn]] void Error(const char* fmt, TArgs&&... args)
         {
             luaL_error(L, fmt, std::forward<TArgs>(args)...);
+            ::abort();
         }
 
         /**
