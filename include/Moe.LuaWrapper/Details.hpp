@@ -175,6 +175,12 @@ namespace LuaWrapper
 
     namespace details
     {
+        template <class, template <class> class>
+        struct IsInstance : public std::false_type {};
+
+        template <class T, template <class> class U>
+        struct IsInstance<U<T>, U> : public std::true_type {};
+
         // --- StackIndexSeq ---
 
         template <int... Ints>
@@ -444,22 +450,30 @@ namespace LuaWrapper
         };
 
         template <typename T>
+        struct TypeRegisterHelperImpl<std::function<T>, 2>
+        {
+            static const bool CanAutoRegister = true;
+
+            static void Register(Stack& st)
+            {
+                // 注册基本函数
+                GenericRegisterFuncs<T>::Register(st);
+            }
+        };
+
+        template <typename T>
         struct TypeRegisterHelper :
-            std::conditional<HasStaticMethodRegister<T>::value,
+            std::conditional<
+                HasStaticMethodRegister<T>::value,
                 TypeRegisterHelperImpl<T, 1>,
-                TypeRegisterHelperImpl<T, 0>>
+                typename std::conditional<
+                    IsInstance<T, std::function>::value,
+                    TypeRegisterHelperImpl<T, 2>,
+                    TypeRegisterHelperImpl<T, 0>>::type>
                 ::type
         {};
 
         // --- FunctionWrapper ---
-
-        [[noreturn]]
-        inline void ThrowLuaError(lua_State* L, const char* what)
-        {
-            lua_pushstring(L, what);
-            lua_error(L);
-            assert(false);
-        }
 
         template <class TSeq, typename TRet, typename... TArgs>
         struct FunctionWrapper;
@@ -480,7 +494,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -508,7 +522,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -537,7 +551,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -565,7 +579,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -613,7 +627,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -660,7 +674,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -708,7 +722,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -755,7 +769,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -771,7 +785,6 @@ namespace LuaWrapper
                 st.PushNativeClosure(Wrapper, 1);
             }
         };
-
 
         // --- ConstMemberFunctionWrapper ---
 
@@ -808,7 +821,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -855,7 +868,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -903,7 +916,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                 }
                 return 0;
             }
@@ -950,7 +963,7 @@ namespace LuaWrapper
                 }
                 catch (const std::exception& ex)
                 {
-                    ThrowLuaError(L, ex.what());
+                    st.Error("%s", ex.what());
                     return 0;
                 }
                 return 1;
@@ -963,6 +976,151 @@ namespace LuaWrapper
                     throw std::bad_alloc();
 
                 p->Ptr = f;
+                st.PushNativeClosure(Wrapper, 1);
+            }
+        };
+
+        // --- StdFunctionWrapper ---
+
+        template <class TSeq, typename TRet, typename... TArgs>
+        struct StdFunctionWrapper;
+
+        template <int... Ints, typename... TArgs>
+        struct StdFunctionWrapper<StackIndexSeq<Ints...>, void, TArgs...>
+        {
+            using FuncType = std::function<void(TArgs...)>;
+
+            static int Wrapper(lua_State* L)
+            {
+                Stack st(L);
+#ifndef NDEBUG
+                auto p = static_cast<Object<FuncType>*>(luaL_checkudata(L, lua_upvalueindex(1), TypeHelper<FuncType>::TypeName()));
+                assert(p);
+#else
+                auto p = static_cast<Object<FuncType>*>(lua_touserdata(L, lua_upvalueindex(1)));
+#endif
+
+                auto& obj = *reinterpret_cast<FuncType*>(reinterpret_cast<char*>(&p->Value));
+                try
+                {
+                    if (obj)
+                        obj(st.Read<TArgs>(Ints)...);
+                }
+                catch (const std::exception& ex)
+                {
+                    st.Error("%s", ex.what());
+                }
+                return 0;
+            }
+
+            static void Push(Stack& st, FuncType&& func)
+            {
+                st.New<FuncType>(std::move(func));  // upvalue 1
+                st.PushNativeClosure(Wrapper, 1);
+            }
+        };
+
+        template <int... Ints, typename TRet, typename... TArgs>
+        struct StdFunctionWrapper<StackIndexSeq<Ints...>, TRet, TArgs...>
+        {
+            using FuncType = std::function<TRet(TArgs...)>;
+
+            static int Wrapper(lua_State* L)
+            {
+                Stack st(L);
+#ifndef NDEBUG
+                auto p = static_cast<Object<FuncType>*>(luaL_checkudata(L, lua_upvalueindex(1), TypeHelper<FuncType>::TypeName()));
+                assert(p);
+#else
+                auto p = static_cast<Object<FuncType>*>(lua_touserdata(L, lua_upvalueindex(1)));
+#endif
+
+                auto& obj = *reinterpret_cast<FuncType*>(reinterpret_cast<char*>(&p->Value));
+                try
+                {
+                    if (obj)
+                        st.Push(obj(st.Read<TArgs>(Ints)...));
+                }
+                catch (const std::exception& ex)
+                {
+                    st.Error("%s", ex.what());
+                }
+                return 1;
+            }
+
+            static void Push(Stack& st, FuncType&& func)
+            {
+                st.New<FuncType>(std::move(func));  // upvalue 1
+                st.PushNativeClosure(Wrapper, 1);
+            }
+        };
+
+        template <int... Ints, typename... TArgs>
+        struct StdFunctionWrapper<StackIndexSeq<Ints...>, void, Stack&, TArgs...>
+        {
+            using FuncType = std::function<void(Stack&, TArgs...)>;
+
+            static int Wrapper(lua_State* L)
+            {
+                Stack st(L);
+#ifndef NDEBUG
+                auto p = static_cast<Object<FuncType>*>(luaL_checkudata(L, lua_upvalueindex(1), TypeHelper<FuncType>::TypeName()));
+                assert(p);
+#else
+                auto p = static_cast<Object<FuncType>*>(lua_touserdata(L, lua_upvalueindex(1)));
+#endif
+
+                auto& obj = *reinterpret_cast<FuncType*>(reinterpret_cast<char*>(&p->Value));
+                try
+                {
+                    if (obj)
+                        obj(st, st.Read<TArgs>(Ints)...);
+                }
+                catch (const std::exception& ex)
+                {
+                    st.Error("%s", ex.what());
+                }
+                return 0;
+            }
+
+            static void Push(Stack& st, FuncType&& func)
+            {
+                st.New<FuncType>(std::move(func));  // upvalue 1
+                st.PushNativeClosure(Wrapper, 1);
+            }
+        };
+
+        template <int... Ints, typename TRet, typename... TArgs>
+        struct StdFunctionWrapper<StackIndexSeq<Ints...>, TRet, Stack&, TArgs...>
+        {
+            using FuncType = std::function<TRet(Stack&, TArgs...)>;
+
+            static int Wrapper(lua_State* L)
+            {
+                Stack st(L);
+#ifndef NDEBUG
+                auto p = static_cast<Object<FuncType>*>(luaL_checkudata(L, lua_upvalueindex(1), TypeHelper<FuncType>::TypeName()));
+                assert(p);
+#else
+                auto p = static_cast<Object<FuncType>*>(lua_touserdata(L, lua_upvalueindex(1)));
+#endif
+
+                auto& obj = *reinterpret_cast<FuncType*>(reinterpret_cast<char*>(&p->Value));
+                try
+                {
+                    if (obj)
+                        st.Push(obj(st, st.Read<TArgs>(Ints)...));
+                }
+                catch (const std::exception& ex)
+                {
+                    st.Error("%s", ex.what());
+                }
+                return 1;
+            }
+
+            static void Push(Stack& st, FuncType&& func)
+            {
+                st.New<FuncType>(std::move(func));  // upvalue 1
                 st.PushNativeClosure(Wrapper, 1);
             }
         };
@@ -990,15 +1148,19 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type
-    Stack::Push(T&& rhs)
+    typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type Stack::Push(T&& rhs)
     {
         New<T>(std::forward<T>(rhs));
     }
 
+    template <typename TRet, typename... TArgs>
+    void Stack::Push(std::function<TRet(TArgs...)>&& v)
+    {
+        details::StdFunctionWrapper<typename details::MatchFuncArgsIndexSeq<TArgs...>::Type, TRet, TArgs...>::Push(*this, std::move(v));
+    }
+
     template <typename T>
-    typename std::enable_if<std::is_class<T>::value && !details::IsStdStringType<T>::value &&
-        !details::IsReferenceType<T>::value, T>::type
+    typename std::enable_if<std::is_class<T>::value && !details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, T>::type
     Stack::Read(int idx)
     {
         auto p = static_cast<details::Object<T>*>(luaL_checkudata(L, idx, details::TypeHelper<T>::TypeName()));
@@ -1012,7 +1174,7 @@ namespace LuaWrapper
     Stack::New(TArgs&&... args)
     {
 #ifndef NDEBUG
-        int check_top = lua_gettop(L);
+        int topCheck = lua_gettop(L);
 #endif
 
         using RealType = typename details::Object<T>::Type;
@@ -1032,7 +1194,7 @@ namespace LuaWrapper
             lua_pop(L, 1);
 
 #ifndef NDEBUG
-            assert(check_top == lua_gettop(L));
+            assert(topCheck == lua_gettop(L));
 #endif
             throw;
         }
@@ -1052,7 +1214,7 @@ namespace LuaWrapper
                 lua_pop(L, 2);
 
 #ifndef NDEBUG
-                assert(check_top == lua_gettop(L));
+                assert(topCheck == lua_gettop(L));
 #endif
                 throw;
             }
@@ -1062,7 +1224,7 @@ namespace LuaWrapper
         lua_setmetatable(L, -2);
 
 #ifndef NDEBUG
-        assert(check_top == lua_gettop(L) - 1);
+        assert(topCheck == lua_gettop(L) - 1);
 #endif
         return *ret;
     }
@@ -1072,7 +1234,7 @@ namespace LuaWrapper
     Stack::New(TArgs&&... args)
     {
 #ifndef NDEBUG
-        int check_top = lua_gettop(L);
+        int topCheck = lua_gettop(L);
 #endif
 
         using RealType = typename details::Object<T>::Type;
@@ -1092,7 +1254,7 @@ namespace LuaWrapper
             lua_pop(L, 1);
 
 #ifndef NDEBUG
-            assert(check_top == lua_gettop(L));
+            assert(topCheck == lua_gettop(L));
 #endif
             throw;
         }
@@ -1107,7 +1269,7 @@ namespace LuaWrapper
             lua_pop(L, 2);
 
 #ifndef NDEBUG
-            assert(check_top == lua_gettop(L));
+            assert(topCheck == lua_gettop(L));
 #endif
             throw std::runtime_error(std::string("User type is not registered: ") + details::TypeHelper<T>::TypeName());
         }
@@ -1116,7 +1278,7 @@ namespace LuaWrapper
         lua_setmetatable(L, -2);
 
 #ifndef NDEBUG
-        assert(check_top == lua_gettop(L) - 1);
+        assert(topCheck == lua_gettop(L) - 1);
 #endif
         return *ret;
     }

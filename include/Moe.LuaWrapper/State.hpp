@@ -108,17 +108,34 @@ namespace LuaWrapper
 
     public:
         template <typename T>
-        void RegisterValue(const char* name, T&& val)
+        RegisterModuleWrapper& RegisterValue(const char* name, T&& val)
         {
             m_stStack.Push(std::forward<T>(val));
             m_stStack.SetField(m_iIndex, name);
+            return *this;
         }
 
         template <typename TRet, typename... TArgs>
-        void RegisterMethod(const char* name, TRet(*f)(TArgs...))
+        RegisterModuleWrapper& RegisterMethod(const char* name, TRet(*f)(TArgs...))
         {
             m_stStack.Push(f);
             m_stStack.SetField(m_iIndex, name);
+            return *this;
+        }
+
+        RegisterModuleWrapper& RegisterMethod(const char* name, lua_CFunction func)
+        {
+            m_stStack.Push(func);
+            m_stStack.SetField(m_iIndex, name);
+            return *this;
+        }
+
+        template <typename TRet, typename... TArgs>
+        RegisterModuleWrapper& RegisterMethod(const char* name, std::function<TRet(TArgs...)>&& func)
+        {
+            m_stStack.Push(std::move(func));
+            m_stStack.SetField(m_iIndex, name);
+            return *this;
         }
 
     protected:

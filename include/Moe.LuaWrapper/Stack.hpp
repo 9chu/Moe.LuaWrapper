@@ -9,6 +9,7 @@
 #include <cassert>
 #include <string>
 #include <stdexcept>
+#include <functional>
 #include <type_traits>
 
 #include <lua.hpp>
@@ -242,12 +243,13 @@ namespace LuaWrapper
         void Push(TRet(T::*v)(TArgs...)const);
 
         template <typename T>
-        typename std::enable_if<details::IsReferenceType<T>::value, void>::type
-        Push(const T& rhs);
+        typename std::enable_if<details::IsReferenceType<T>::value, void>::type Push(const T& rhs);
 
         template <typename T>
-        typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type
-        Push(T&& rhs);
+        typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type Push(T&& rhs);
+
+        template <typename TRet, typename... TArgs>
+        void Push(std::function<TRet(TArgs...)>&& v);
 
         /**
          * @brief 拷贝栈上的值
@@ -292,10 +294,12 @@ namespace LuaWrapper
          * [-0, +0]
          */
         template <typename T>
-        typename std::enable_if<std::is_fundamental<T>::value, typename std::remove_reference<T>::type>::type
-        Read(int idx=-1)
+        typename std::enable_if<std::is_fundamental<T>::value || std::is_same<T, const char*>::value ||
+            std::is_same<T, lua_CFunction>::value, typename std::remove_reference<T>::type>::type Read(int idx=-1)
         {
-            return ReadImpl<T>(idx);
+            T ret;
+            ReadImpl(ret, idx);
+            return std::move(ret);
         }
 
         template <typename T>
@@ -304,16 +308,13 @@ namespace LuaWrapper
         Read(int idx=-1);
 
         template <typename T>
-        typename std::enable_if<details::IsReferenceType<T>::type, Reference>::type
-        Read(int idx=-1);
+        typename std::enable_if<details::IsReferenceType<T>::value, Reference>::type Read(int idx=-1);
 
         template <typename T>
-        typename std::enable_if<std::is_same<T, std::string>::value, std::string>::type
-        Read(int idx=-1);
+        typename std::enable_if<std::is_same<T, std::string>::value, std::string>::type Read(int idx=-1);
 
         template <typename T>
-        typename std::enable_if<std::is_same<T, const std::string&>::value, std::string>::type
-        Read(int idx=-1);
+        typename std::enable_if<std::is_same<T, const std::string&>::value, std::string>::type Read(int idx=-1);
 
         /**
          * @brief 在栈上新建一个用户对象
@@ -323,13 +324,11 @@ namespace LuaWrapper
          * @return 对象引用
          */
         template <typename T, typename... TArgs>
-        typename std::enable_if<details::TypeRegisterHelper<typename details::Object<T>::Type>::CanAutoRegister,
-            T&>::type
+        typename std::enable_if<details::TypeRegisterHelper<typename details::Object<T>::Type>::CanAutoRegister, T&>::type
         New(TArgs&&... args);
 
         template <typename T, typename... TArgs>
-        typename std::enable_if<!details::TypeRegisterHelper<typename details::Object<T>::Type>::CanAutoRegister,
-            T&>::type
+        typename std::enable_if<!details::TypeRegisterHelper<typename details::Object<T>::Type>::CanAutoRegister, T&>::type
         New(TArgs&&... args);
 
         /**
@@ -475,7 +474,7 @@ namespace LuaWrapper
         void CallAndThrow(unsigned nargs, unsigned nrets)
         {
 #ifndef NDEBUG
-            int check_top = lua_gettop(L);
+            int topCheck = lua_gettop(L);
 #endif
 
             lua_pushcfunction(L, details::TracebackImpl);  // ... func, arg1, arg2, c
@@ -490,7 +489,7 @@ namespace LuaWrapper
                 lua_pop(L, 2);  // ...
 
 #ifndef NDEBUG
-                assert(check_top - 1 == lua_gettop(L));
+                assert(topCheck - 1 == lua_gettop(L));
 #endif
 
                 throw std::runtime_error(std::move(errmsg));
@@ -499,7 +498,7 @@ namespace LuaWrapper
             lua_pop(L, 1);  // ...
 
 #ifndef NDEBUG
-            assert(check_top - 1 == lua_gettop(L));
+            assert(topCheck - 1 == lua_gettop(L));
 #endif
         }
 
@@ -543,92 +542,85 @@ namespace LuaWrapper
         }
 
     private:
-        template <typename T>
-        T ReadImpl(int idx);
+        void ReadImpl(nullptr_t& out, int idx)
+        {
+            out = nullptr_t {};
+            if (!lua_isnil(L, idx))
+                luaL_typerror(L, idx, lua_typename(L, LUA_TNIL));
+        }
+
+        void ReadImpl(bool& out, int idx)
+        {
+            if (lua_isboolean(L, idx))
+            {
+                out = (lua_toboolean(L, idx) != 0);
+                return;
+            }
+            else if (lua_isnumber(L, idx))
+            {
+                auto x = lua_tointeger(L, idx);
+                out = (x != 0);
+                return;
+            }
+            luaL_typerror(L, idx, lua_typename(L, LUA_TBOOLEAN));
+        }
+
+        void ReadImpl(char& out, int idx)
+        {
+            out = static_cast<char>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(uint8_t& out, int idx)
+        {
+            out = static_cast<uint8_t>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(int16_t& out, int idx)
+        {
+            out = static_cast<int16_t>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(uint16_t& out, int idx)
+        {
+            out = static_cast<uint16_t>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(int32_t& out, int idx)
+        {
+            out = static_cast<int32_t>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(uint32_t& out, int idx)
+        {
+            out = static_cast<uint32_t>(luaL_checkinteger(L, idx));
+        }
+
+        void ReadImpl(lua_Integer& out, int idx)
+        {
+            out = luaL_checkinteger(L, idx);
+        }
+
+        void ReadImpl(lua_Number& out, int idx)
+        {
+            out = luaL_checknumber(L, idx);
+        }
+
+        void ReadImpl(const char*& out, int idx)
+        {
+            out = luaL_checkstring(L, idx);
+        }
+
+        void ReadImpl(lua_CFunction& out, int idx)
+        {
+            out = lua_tocfunction(L, idx);
+        }
 
     protected:
         lua_State* L = nullptr;
     };
 
-    template <>
-    bool Stack::ReadImpl<bool>(int idx)
-    {
-        if (lua_isboolean(L, idx))
-            return lua_toboolean(L, idx) != 0;
-        else if (lua_isnumber(L, idx))
-        {
-            auto x = lua_tointeger(L, idx);
-            return x != 0;
-        }
-        luaL_typerror(L, idx, lua_typename(L, LUA_TBOOLEAN));
-
-        // never reached
-        return lua_toboolean(L, idx) != 0;
-    }
-
-    template <>
-    char Stack::ReadImpl<char>(int idx)
-    {
-        return static_cast<char>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    uint8_t Stack::ReadImpl<uint8_t>(int idx)
-    {
-        return static_cast<uint8_t>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    int16_t Stack::ReadImpl<int16_t>(int idx)
-    {
-        return static_cast<int16_t>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    uint16_t Stack::ReadImpl<uint16_t>(int idx)
-    {
-        return static_cast<uint16_t>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    int32_t Stack::ReadImpl<int32_t>(int idx)
-    {
-        return static_cast<int32_t>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    uint32_t Stack::ReadImpl<uint32_t>(int idx)
-    {
-        return static_cast<uint32_t>(luaL_checkinteger(L, idx));
-    }
-
-    template <>
-    lua_Integer Stack::ReadImpl<lua_Integer>(int idx)
-    {
-        return luaL_checkinteger(L, idx);
-    }
-
-    template <>
-    lua_Number Stack::ReadImpl<lua_Number>(int idx)
-    {
-        return luaL_checknumber(L, idx);
-    }
-
-    template <>
-    lua_CFunction Stack::ReadImpl<lua_CFunction>(int idx)
-    {
-        return lua_tocfunction(L, idx);
-    }
-
-    template <>
-    const char* Stack::ReadImpl<const char*>(int idx)
-    {
-        return luaL_checkstring(L, idx);
-    }
-
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, std::string>::type
-    Stack::Read(int idx)
+    typename std::enable_if<std::is_same<T, std::string>::value, std::string>::type Stack::Read(int idx)
     {
         std::string ret;
         size_t len = 0;
@@ -640,8 +632,7 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, const std::string&>::value, std::string>::type
-    Stack::Read(int idx)
+    typename std::enable_if<std::is_same<T, const std::string&>::value, std::string>::type Stack::Read(int idx)
     {
         std::string ret;
         size_t len = 0;

@@ -119,7 +119,7 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<details::IsReferenceType<T>::type, Reference>::type
+    typename std::enable_if<details::IsReferenceType<T>::value, Reference>::type
     Stack::Read(int idx)
     {
         lua_pushvalue(L, idx);
