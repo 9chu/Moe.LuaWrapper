@@ -30,7 +30,7 @@ namespace LuaWrapper
             Reference ret;
             ret.m_pContext = st;
             ret.m_iRef = luaL_ref(st, LUA_REGISTRYINDEX);
-            return std::move(ret);
+            return ret;
         }
 
     public:
