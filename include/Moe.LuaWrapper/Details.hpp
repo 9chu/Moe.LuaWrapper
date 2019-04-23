@@ -134,8 +134,8 @@ namespace LuaWrapper
          * @param reader 读取方法
          * @param writer 赋值方法
          */
-        template <typename TValue>
-        TypeRegister& RegisterProperty(const char* name, TValue(T::*reader)(), void(T::*writer)(TValue))
+        template <typename TValue, typename TValue2 = TValue>
+        TypeRegister& RegisterProperty(const char* name, TValue(T::*reader)(), void(T::*writer)(TValue2))
         {
             m_stStack.Push("__get_");
             m_stStack.Push(name);
@@ -151,8 +151,8 @@ namespace LuaWrapper
             return *this;
         }
 
-        template <typename TValue>
-        TypeRegister& RegisterProperty(const char* name, TValue(T::*reader)()const, void(T::*writer)(TValue))
+        template <typename TValue, typename TValue2 = TValue>
+        TypeRegister& RegisterProperty(const char* name, TValue(T::*reader)()const, void(T::*writer)(TValue2))
         {
             m_stStack.Push("__get_");
             m_stStack.Push(name);
