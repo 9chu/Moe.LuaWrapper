@@ -1160,13 +1160,14 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<std::is_class<T>::value && !details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, T>::type
+    typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && !details::IsStdStringType<T>::value &&
+        !details::IsReferenceType<T>::value, T>::type
     Stack::Read(int idx)
     {
         auto p = static_cast<details::Object<T>*>(luaL_checkudata(L, idx, details::TypeHelper<T>::TypeName()));
         assert(p);
 
-        return *reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value));
+        return *reinterpret_cast<typename details::Object<T>::Type*>(reinterpret_cast<char*>(&p->Value));
     }
 
     template <typename T, typename... TArgs>

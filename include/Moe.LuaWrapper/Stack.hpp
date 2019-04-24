@@ -324,7 +324,7 @@ namespace LuaWrapper
         }
 
         template <typename T>
-        typename std::enable_if<std::is_class<T>::value && !details::IsStdStringType<T>::value &&
+        typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && !details::IsStdStringType<T>::value &&
             !details::IsReferenceType<T>::value, T>::type
         Read(int idx=-1);
 
