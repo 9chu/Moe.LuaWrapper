@@ -20,13 +20,29 @@ namespace LuaWrapper
 {
     class Reference;
 
+    struct StringView
+    {
+        const char* Buffer = nullptr;
+        size_t Length = 0;
+    };
+
     namespace details
     {
+        template <typename T>
+        using IsStringViewType = typename std::is_same<typename std::decay<T>::type, StringView>;
+
         template <typename T>
         using IsStdStringType = typename std::is_same<typename std::decay<T>::type, std::string>;
 
         template <typename T>
         using IsReferenceType = typename std::is_same<typename std::decay<T>::type, Reference>;
+
+        template <typename T>
+        struct IsOtherType
+        {
+            static const bool value = !details::IsStringViewType<T>::value && !details::IsStdStringType<T>::value &&
+                !details::IsReferenceType<T>::value;
+        };
 
         template <typename T>
         struct TypeRegisterHelper;
@@ -254,6 +270,11 @@ namespace LuaWrapper
             lua_pushlstring(L, v.c_str(), v.size());
         }
 
+        void Push(const StringView& v)
+        {
+            lua_pushlstring(L, v.Buffer, v.Length);
+        }
+
         template <typename TRet, typename... TArgs>
         void Push(TRet(*v)(TArgs...));
 
@@ -267,7 +288,7 @@ namespace LuaWrapper
         typename std::enable_if<details::IsReferenceType<T>::value, void>::type Push(const T& rhs);
 
         template <typename T>
-        typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type Push(T&& rhs);
+        typename std::enable_if<details::IsOtherType<T>::value, void>::type Push(T&& rhs);
 
         template <typename TRet, typename... TArgs>
         void Push(std::function<TRet(TArgs...)>&& v);
@@ -324,8 +345,7 @@ namespace LuaWrapper
         }
 
         template <typename T>
-        typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && !details::IsStdStringType<T>::value &&
-            !details::IsReferenceType<T>::value, T>::type
+        typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && details::IsOtherType<T>::value, T>::type
         Read(int idx=-1);
 
         template <typename T>
@@ -336,6 +356,12 @@ namespace LuaWrapper
 
         template <typename T>
         typename std::enable_if<std::is_same<T, const std::string&>::value, std::string>::type Read(int idx=-1);
+
+        template <typename T>
+        typename std::enable_if<std::is_same<T, StringView>::value, StringView>::type Read(int idx=-1);
+
+        template <typename T>
+        typename std::enable_if<std::is_same<T, const StringView&>::value, StringView>::type Read(int idx=-1);
 
         /**
          * @brief 在栈上新建一个用户对象
@@ -678,6 +704,22 @@ namespace LuaWrapper
         auto p = luaL_checklstring(L, idx, &len);
         if (p)
             ret.assign(p, len);
+        return ret;
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, StringView>::value, StringView>::type Stack::Read(int idx)
+    {
+        StringView ret;
+        ret.Buffer = luaL_checklstring(L, idx, &ret.Length);
+        return ret;
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, const StringView&>::value, StringView>::type Stack::Read(int idx)
+    {
+        StringView ret;
+        ret.Buffer = luaL_checklstring(L, idx, &ret.Length);
         return ret;
     }
 

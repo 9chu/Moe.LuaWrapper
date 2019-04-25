@@ -1148,7 +1148,7 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<!details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value, void>::type Stack::Push(T&& rhs)
+    typename std::enable_if<details::IsOtherType<T>::value, void>::type Stack::Push(T&& rhs)
     {
         New<T>(std::forward<T>(rhs));
     }
@@ -1160,8 +1160,7 @@ namespace LuaWrapper
     }
 
     template <typename T>
-    typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && !details::IsStdStringType<T>::value &&
-        !details::IsReferenceType<T>::value, T>::type
+    typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && details::IsOtherType<T>::value, T>::type
     Stack::Read(int idx)
     {
         auto p = static_cast<details::Object<T>*>(luaL_checkudata(L, idx, details::TypeHelper<T>::TypeName()));
