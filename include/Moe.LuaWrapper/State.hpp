@@ -183,6 +183,17 @@ namespace LuaWrapper
         {
             if (!L)
                 throw std::runtime_error("luaL_newstate failed");
+
+#ifndef LUA_RIDX_MAINTHREAD
+#ifndef NDEBUG
+            unsigned topCheck = GetTop();
+#endif
+            PushThread();
+            SetField(LUA_REGISTRYINDEX, "__mainthread");
+#ifndef NDEBUG
+            assert(topCheck == GetTop());
+#endif
+#endif
         }
         State(const State&) = delete;
         State(State&& rhs)noexcept

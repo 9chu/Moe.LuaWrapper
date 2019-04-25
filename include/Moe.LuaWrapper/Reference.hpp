@@ -25,11 +25,29 @@ namespace LuaWrapper
          *
          * 将会从栈顶Pop掉一个值，并计入引用表中。
          */
-        static Reference Capture(Stack st)
+        static Reference Capture(Stack& st)
         {
+#ifndef NDEBUG
+            unsigned topCheck = st.GetTop();
+#endif
+
+#ifdef LUA_RIDX_MAINTHREAD
+            st.Push<int>(LUA_RIDX_MAINTHREAD);  // ? i
+            st.RawGet(LUA_REGISTRYINDEX);  // ? t
+#else
+            st.Push("__mainthread");  // ? s
+            st.RawGet(LUA_REGISTRYINDEX);  // ? t
+#endif
+
             Reference ret;
-            ret.m_pContext = st;
+            ret.m_pContext = (st.TypeOf(-1) != LUA_TTHREAD ? st : Stack(lua_tothread(st, -1)));
+            st.Pop(1);
+
             ret.m_iRef = luaL_ref(st, LUA_REGISTRYINDEX);
+
+#ifndef NDEBUG
+            assert(topCheck == st.GetTop() + 1);
+#endif
             return ret;
         }
 

@@ -26,10 +26,18 @@ namespace LuaWrapper
         size_t Length = 0;
     };
 
+    struct StackReference
+    {
+        unsigned AbsIndex = 0;
+    };
+
     namespace details
     {
         template <typename T>
         using IsStringViewType = typename std::is_same<typename std::decay<T>::type, StringView>;
+
+        template <typename T>
+        using IsStackReferenceType = typename std::is_same<typename std::decay<T>::type, StackReference>;
 
         template <typename T>
         using IsStdStringType = typename std::is_same<typename std::decay<T>::type, std::string>;
@@ -40,8 +48,8 @@ namespace LuaWrapper
         template <typename T>
         struct IsOtherType
         {
-            static const bool value = !details::IsStringViewType<T>::value && !details::IsStdStringType<T>::value &&
-                !details::IsReferenceType<T>::value;
+            static const bool value = !details::IsStringViewType<T>::value && !details::IsStackReferenceType<T>::value &&
+                !details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value;
         };
 
         template <typename T>
@@ -275,6 +283,11 @@ namespace LuaWrapper
             lua_pushlstring(L, v.Buffer, v.Length);
         }
 
+        void Push(const StackReference& v)
+        {
+            lua_pushvalue(L, static_cast<int>(v.AbsIndex));
+        }
+
         template <typename TRet, typename... TArgs>
         void Push(TRet(*v)(TArgs...));
 
@@ -325,6 +338,15 @@ namespace LuaWrapper
         void PushNativeClosure(lua_CFunction fn, unsigned n)
         {
             lua_pushcclosure(L, fn, n);
+        }
+
+        /**
+         * @brief 将当前Thread推入栈中
+         * @return 是否是MainThread
+         */
+        bool PushThread()
+        {
+            return 1 == lua_pushthread(L);
         }
 
         /**

@@ -292,7 +292,7 @@ namespace LuaWrapper
 
         struct ObjectHeader
         {
-            uintptr_t TypeId;
+            //uintptr_t TypeId;
         };
 
         template <typename T>
@@ -1186,7 +1186,7 @@ namespace LuaWrapper
 
         try
         {
-            p->Header.TypeId = details::TypeHelper<T>::TypeId();
+            //p->Header.TypeId = details::TypeHelper<T>::TypeId();
             new(&p->Value) RealType(std::forward<TArgs>(args)...);
         }
         catch (...)
@@ -1246,7 +1246,7 @@ namespace LuaWrapper
 
         try
         {
-            p->Header.TypeId = details::TypeHelper<T>::TypeId();
+            //p->Header.TypeId = details::TypeHelper<T>::TypeId();
             new(&p->Value) RealType(std::forward<TArgs>(args)...);
         }
         catch (...)
