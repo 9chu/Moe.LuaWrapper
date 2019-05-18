@@ -85,11 +85,23 @@ namespace LuaWrapper
             m_iCheckTop = m_stStack.GetTop();
 #endif
 
-            m_stStack.NewTable();
-            m_iIndex = m_stStack.GetTop();
+            m_stStack.GetField(LUA_REGISTRYINDEX, "_LOADED");  // t
+            m_stStack.GetField(-1, name);  // t ?
+            if (m_stStack.TypeOf(-1) == LUA_TNIL)
+            {
+                m_stStack.Pop(1);  // t
+                m_stStack.NewTable();  // t t
+                m_stStack.PushValue(-1);  // t t t
+                m_stStack.SetField(-3, name);  // t t
+            }
+            else if (m_stStack.TypeOf(-1) != LUA_TTABLE)
+            {
+                m_stStack.Pop(2);
+                throw std::runtime_error("loop or previous error loading module");
+            }
 
-            m_stStack.PushValue(-1);
-            m_stStack.SetGlobal(name);
+            m_stStack.Remove(-2);
+            m_iIndex = m_stStack.GetTop();
         }
 
         RegisterModuleWrapper(const RegisterModuleWrapper&) = delete;
