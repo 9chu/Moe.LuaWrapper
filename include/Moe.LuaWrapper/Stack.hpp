@@ -441,6 +441,16 @@ namespace LuaWrapper
         New(TArgs&&... args);
 
         /**
+         * @brief 检查指定类型是否是给定的用户类型
+         * @tparam T 类型
+         * @param idx 索引
+         * @return 是否为目标类型
+         */
+        template <typename T>
+        typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && details::IsOtherType<T>::value, bool>::type
+        CheckType(int idx);
+
+        /**
          * @brief 对栈顶的N个元素执行拼接操作
          * @param n 元素
          *

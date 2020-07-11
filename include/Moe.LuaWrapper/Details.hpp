@@ -1281,5 +1281,12 @@ namespace LuaWrapper
 #endif
         return *ret;
     }
+
+    template <typename T>
+    typename std::enable_if<std::is_class<typename std::decay<T>::type>::value && details::IsOtherType<T>::value, bool>::type
+    Stack::CheckType(int idx)
+    {
+        return static_cast<details::Object<T>*>(luaL_checkudata(L, idx, details::TypeHelper<T>::TypeName())) != nullptr;
+    }
 }
 }
