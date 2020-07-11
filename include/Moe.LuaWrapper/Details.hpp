@@ -518,14 +518,13 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push(ptr(st.Read<TArgs>(Ints)...));
+                    return st.Push(ptr(st.Read<TArgs>(Ints)...));
                 }
                 catch (const std::exception& ex)
                 {
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(*f)(TArgs...))
@@ -575,14 +574,13 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push(ptr(st, st.Read<TArgs>(Ints)...));
+                    return st.Push(ptr(st, st.Read<TArgs>(Ints)...));
                 }
                 catch (const std::exception& ex)
                 {
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(*f)(Stack&, TArgs...))
@@ -669,7 +667,7 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(
+                    return st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(
                         st.Read<TArgs>(Ints + 1)...));
                 }
                 catch (const std::exception& ex)
@@ -677,7 +675,6 @@ namespace LuaWrapper
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(T::*f)(TArgs...))
@@ -764,7 +761,7 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(st,
+                    return st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(st,
                         st.Read<TArgs>(Ints + 1)...));
                 }
                 catch (const std::exception& ex)
@@ -772,7 +769,6 @@ namespace LuaWrapper
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(T::*f)(Stack&, TArgs...))
@@ -863,7 +859,7 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(
+                    return st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(
                         st.Read<TArgs>(Ints + 1)...));
                 }
                 catch (const std::exception& ex)
@@ -871,7 +867,6 @@ namespace LuaWrapper
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(T::*f)(TArgs...)const)
@@ -958,7 +953,7 @@ namespace LuaWrapper
 
                 try
                 {
-                    st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(st,
+                    return st.Push((reinterpret_cast<T*>(reinterpret_cast<char*>(&p->Value))->*(w->Ptr))(st,
                         st.Read<TArgs>(Ints + 1)...));
                 }
                 catch (const std::exception& ex)
@@ -966,7 +961,6 @@ namespace LuaWrapper
                     st.Error("%s", ex.what());
                     return 0;
                 }
-                return 1;
             }
 
             static void Push(Stack& st, TRet(T::*f)(Stack&, TArgs...)const)
@@ -1039,13 +1033,13 @@ namespace LuaWrapper
                 try
                 {
                     if (obj)
-                        st.Push(obj(st.Read<TArgs>(Ints)...));
+                        return st.Push(obj(st.Read<TArgs>(Ints)...));
                 }
                 catch (const std::exception& ex)
                 {
                     st.Error("%s", ex.what());
                 }
-                return 1;
+                return 0;
             }
 
             static void Push(Stack& st, FuncType&& func)
@@ -1109,13 +1103,13 @@ namespace LuaWrapper
                 try
                 {
                     if (obj)
-                        st.Push(obj(st, st.Read<TArgs>(Ints)...));
+                        return st.Push(obj(st, st.Read<TArgs>(Ints)...));
                 }
                 catch (const std::exception& ex)
                 {
                     st.Error("%s", ex.what());
                 }
-                return 1;
+                return 0;
             }
 
             static void Push(Stack& st, FuncType&& func)
@@ -1127,36 +1121,41 @@ namespace LuaWrapper
     }
 
     template <typename TRet, typename... TArgs>
-    void Stack::Push(TRet(*v)(TArgs...))
+    int Stack::Push(TRet(*v)(TArgs...))
     {
         details::FunctionWrapper<typename details::MatchFuncArgsIndexSeq<TArgs...>::Type, TRet, TArgs...>::
             Push(*this, v);
+        return 1;
     }
 
     template <typename T, typename TRet, typename... TArgs>
-    void Stack::Push(TRet(T::*v)(TArgs...))
+    int Stack::Push(TRet(T::*v)(TArgs...))
     {
         details::MemberFunctionWrapper<typename details::MatchFuncArgsIndexSeq<TArgs...>::Type, T, TRet, TArgs...>::
             Push(*this, std::move(v));
+        return 1;
     }
 
     template <typename T, typename TRet, typename... TArgs>
-    void Stack::Push(TRet(T::*v)(TArgs...)const)
+    int Stack::Push(TRet(T::*v)(TArgs...)const)
     {
         details::ConstMemberFunctionWrapper<
             typename details::MatchFuncArgsIndexSeq<TArgs...>::Type, T, TRet, TArgs...>::Push(*this, std::move(v));
+        return 1;
     }
 
     template <typename T>
-    typename std::enable_if<details::IsOtherType<T>::value, void>::type Stack::Push(T&& rhs)
+    typename std::enable_if<details::IsOtherType<T>::value, int>::type Stack::Push(T&& rhs)
     {
         New<T>(std::forward<T>(rhs));
+        return 1;
     }
 
     template <typename TRet, typename... TArgs>
-    void Stack::Push(std::function<TRet(TArgs...)>&& v)
+    int Stack::Push(std::function<TRet(TArgs...)>&& v)
     {
         details::StdFunctionWrapper<typename details::MatchFuncArgsIndexSeq<TArgs...>::Type, TRet, TArgs...>::Push(*this, std::move(v));
+        return 1;
     }
 
     template <typename T>

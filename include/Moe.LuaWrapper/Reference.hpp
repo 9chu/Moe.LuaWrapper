@@ -127,13 +127,14 @@ namespace LuaWrapper
     };
 
     template <typename T>
-    typename std::enable_if<details::IsReferenceType<T>::value, void>::type
+    typename std::enable_if<details::IsReferenceType<T>::value, int>::type
     Stack::Push(const T& ref)
     {
         if (ref)
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref.m_iRef);
         else
             lua_pushnil(L);
+        return 1;
     }
 
     template <typename T>

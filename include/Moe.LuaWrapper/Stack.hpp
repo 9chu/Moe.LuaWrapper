@@ -46,10 +46,25 @@ namespace LuaWrapper
         using IsReferenceType = typename std::is_same<typename std::decay<T>::type, Reference>;
 
         template <typename T>
+        struct IsStdPairTypeMatcher :
+            public std::false_type
+        {
+        };
+
+        template <typename T1, typename T2>
+        struct IsStdPairTypeMatcher<std::pair<T1, T2>> :
+            public std::true_type
+        {
+        };
+
+        template <typename T>
+        using IsStdPairType = IsStdPairTypeMatcher<typename std::decay<T>::type>;
+
+        template <typename T>
         struct IsOtherType
         {
             static const bool value = !details::IsStringViewType<T>::value && !details::IsStackReferenceType<T>::value &&
-                !details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value;
+                !details::IsStdStringType<T>::value && !details::IsReferenceType<T>::value && !details::IsStdPairType<T>::value;
         };
 
         template <typename T>
@@ -194,117 +209,142 @@ namespace LuaWrapper
          *
          * [-0, +1]
          */
-        void Push(std::nullptr_t)
+        int Push(std::nullptr_t)
         {
             lua_pushnil(L);
+            return 1;
         }
 
-        void Push(bool v)
+        int Push(bool v)
         {
             lua_pushboolean(L, v);
+            return 1;
         }
 
-        void Push(char v)
+        int Push(char v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(uint8_t v)
+        int Push(uint8_t v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(int16_t v)
+        int Push(int16_t v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(uint16_t v)
+        int Push(uint16_t v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(int32_t v)
+        int Push(int32_t v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(uint32_t v)
+        int Push(uint32_t v)
         {
             lua_pushinteger(L, v);
+            return 1;
         }
 
-        void Push(int64_t v)
+        int Push(int64_t v)
         {
             if (sizeof(lua_Integer) == 8)
                 lua_pushinteger(L, static_cast<lua_Integer>(v));
             else
                 lua_pushnumber(L, static_cast<lua_Number>(v));
+            return 1;
         }
 
-        void Push(uint64_t v)
+        int Push(uint64_t v)
         {
             if (sizeof(lua_Integer) == 8)
                 lua_pushinteger(L, static_cast<lua_Integer>(v));
             else
                 lua_pushnumber(L, static_cast<lua_Number>(v));
+            return 1;
         }
 
-        void Push(float v)
+        int Push(float v)
         {
             lua_pushnumber(L, v);
+            return 1;
         }
 
-        void Push(double v)
+        int Push(double v)
         {
             lua_pushnumber(L, v);
+            return 1;
         }
 
-        void Push(lua_CFunction v)
+        int Push(lua_CFunction v)
         {
             if (v == nullptr)
                 lua_pushnil(L);
             else
                 lua_pushcfunction(L, v);
+            return 1;
         }
 
-        void Push(const char* v)
+        int Push(const char* v)
         {
             lua_pushstring(L, v);
+            return 1;
         }
 
-        void Push(const std::string& v)
+        int Push(const std::string& v)
         {
             lua_pushlstring(L, v.c_str(), v.size());
+            return 1;
         }
 
-        void Push(const StringView& v)
+        int Push(const StringView& v)
         {
             lua_pushlstring(L, v.Buffer, v.Length);
+            return 1;
         }
 
-        void Push(const StackReference& v)
+        int Push(const StackReference& v)
         {
             lua_pushvalue(L, static_cast<int>(v.AbsIndex));
+            return 1;
+        }
+
+        template <typename T1, typename T2>
+        int Push(const std::pair<T1, T2>& v)
+        {
+            Push(v.first);
+            Push(v.second);
+            return 2;
         }
 
         template <typename TRet, typename... TArgs>
-        void Push(TRet(*v)(TArgs...));
+        int Push(TRet(*v)(TArgs...));
 
         template <typename T, typename TRet, typename... TArgs>
-        void Push(TRet(T::*v)(TArgs...));
+        int Push(TRet(T::*v)(TArgs...));
 
         template <typename T, typename TRet, typename... TArgs>
-        void Push(TRet(T::*v)(TArgs...)const);
+        int Push(TRet(T::*v)(TArgs...)const);
 
         template <typename T>
-        typename std::enable_if<details::IsReferenceType<T>::value, void>::type Push(const T& rhs);
+        typename std::enable_if<details::IsReferenceType<T>::value, int>::type Push(const T& rhs);
 
         template <typename T>
-        typename std::enable_if<details::IsOtherType<T>::value, void>::type Push(T&& rhs);
+        typename std::enable_if<details::IsOtherType<T>::value, int>::type Push(T&& rhs);
 
         template <typename TRet, typename... TArgs>
-        void Push(std::function<TRet(TArgs...)>&& v);
+        int Push(std::function<TRet(TArgs...)>&& v);
 
         /**
          * @brief 拷贝栈上的值
