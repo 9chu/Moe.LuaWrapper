@@ -539,6 +539,7 @@ namespace LuaWrapper
             lua_setglobal(L, field);
         }
 
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM < 502
         /**
          * @brief 设置函数的执行上下文
          * @param idx 函数或者Thread的索引
@@ -549,6 +550,7 @@ namespace LuaWrapper
         {
             lua_setfenv(L, idx);
         }
+#endif
 
         /**
          * @brief 抛出一个错误
@@ -666,7 +668,7 @@ namespace LuaWrapper
         {
             out = nullptr_t {};
             if (!lua_isnil(L, idx))
-                luaL_typerror(L, idx, lua_typename(L, LUA_TNIL));
+                luaL_typeerror(L, idx, lua_typename(L, LUA_TNIL));
         }
 
         void ReadImpl(bool& out, int idx)
@@ -682,7 +684,7 @@ namespace LuaWrapper
                 out = (x != 0);
                 return;
             }
-            luaL_typerror(L, idx, lua_typename(L, LUA_TBOOLEAN));
+            luaL_typeerror(L, idx, lua_typename(L, LUA_TBOOLEAN));
         }
 
         void ReadImpl(char& out, int idx)
